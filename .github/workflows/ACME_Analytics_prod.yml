@@ -1,0 +1,59 @@
+name: ACME_Analytics_prod
+
+on:
+  schedule:
+    # Runs at midnight ET (us-east-1)
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  db-backup:
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+
+    env:
+      IAM_ROLE: 'neon-multiple-db-s3-backups-github-action'
+      BACKUP_ID: 'ACME_Analytics_prod'
+      DATABASE_URL: ${{ secrets.ACME_ANALYTICS_PROD }}
+      PG_VERSION: '16'
+      AWS_REGION: 'us-east-1'
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      S3_BUCKET_URL: ${{ secrets.S3_BUCKET_URL }}
+
+    steps:
+      - name: Install PostgreSQL
+        run: |
+          sudo apt install -y postgresql-common
+          yes '' | sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh
+          sudo apt install -y postgresql-${{ env.PG_VERSION }}
+
+      - name: Get timestamp
+        id: timestamp
+        run: |
+          echo "TIMESTAMP=$(date +%d-%B-%Y@%H:%M:%S)" >> $GITHUB_ENV
+
+      - name: Run pg_dump
+        run: |
+          TIMESTAMP="${{ env.TIMESTAMP }}"
+          FILENAME="${{ env.BACKUP_ID }}-${TIMESTAMP}.sql.gz"
+          /usr/lib/postgresql/${{ env.PG_VERSION }}/bin/pg_dump ${{ env.DATABASE_URL }} | gzip > "${FILENAME}"
+          echo "FILENAME=${FILENAME}" >> $GITHUB_ENV  # Ensure this is executed successfully
+          echo "Backup file created: ${FILENAME}"  # Debugging output
+
+      - name: List Files
+        run: |
+          ls -l  # List files to ensure backup file exists
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.IAM_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload to Bucket
+        run: |
+          FILENAME="${{ env.FILENAME }}"
+          echo "Uploading ${FILENAME} to s3://${{ env.S3_BUCKET_URL }}"
+          aws s3 cp "${FILENAME}" "s3://${{ env.S3_BUCKET_URL }}"
