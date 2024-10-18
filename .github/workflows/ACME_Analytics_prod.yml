@@ -14,6 +14,7 @@ jobs:
       id-token: write
 
     env:
+      RETENTION: 7
       IAM_ROLE: 'neon-multiple-db-s3-backups-github-action'
       BACKUP_ID: 'ACME_Analytics_prod'
       DATABASE_URL: ${{ secrets.ACME_ANALYTICS_PROD }}
@@ -51,6 +52,14 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.IAM_ROLE }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Empty Bucket
+        run: |
+          THRESHOLD_DATE=$(date -d "-${{ env.RETENTION }} days" +%Y-%m-%dT%H:%M:%SZ)
+          aws s3api list-objects --bucket ${{ env.S3_BUCKET_URL }} --query "Contents[?LastModified<'${THRESHOLD_DATE}'] | [?contains(Key, '${{ env.BACKUP_ID }}')].{Key: Key}" --output text | while read -r file; do
+            echo "Deleting old file: $file"
+            aws s3 rm "s3://${{ env.S3_BUCKET_URL }}/$file"
+          done
 
       - name: Upload to Bucket
         run: |
