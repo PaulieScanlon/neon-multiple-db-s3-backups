@@ -30,22 +30,16 @@ jobs:
           yes '' | sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh
           sudo apt install -y postgresql-${{ env.PG_VERSION }}
 
-      - name: Get timestamp
-        id: timestamp
-        run: |
-          echo "TIMESTAMP=$(date +%d-%B-%Y@%H:%M:%S)" >> $GITHUB_ENV
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.IAM_ROLE }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Create Folder if it doesn't exist
+      - name: Create folder if it doesn't exist
         run: |
           FOLDER="${{ env.BACKUP_NAME }}/"
           if ! aws s3api head-object --bucket ${{ env.S3_BUCKET_NAME }} --key "$FOLDER" 2>/dev/null; then
-            echo "Folder does not exist. Creating folder: $FOLDER"
             aws s3api put-object --bucket ${{ env.S3_BUCKET_NAME }} --key "$FOLDER"
           fi
 
@@ -54,13 +48,11 @@ jobs:
           TIMESTAMP="${{ env.TIMESTAMP }}"
           FILENAME="${TIMESTAMP}.sql.gz"
           /usr/lib/postgresql/${{ env.PG_VERSION }}/bin/pg_dump ${{ env.DATABASE_URL }} | gzip > "${FILENAME}"
-          echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
 
-      - name: Empty Bucket of Old Files
+      - name: Empty Bucket of old files
         run: |
           THRESHOLD_DATE=$(date -d "-${{ env.RETENTION }} days" +%Y-%m-%dT%H:%M:%SZ)
           aws s3api list-objects --bucket ${{ env.S3_BUCKET_NAME }} --query "Contents[?LastModified<'${THRESHOLD_DATE}'] | [?contains(Key, '${{ env.BACKUP_NAME }}')].{Key: Key}" --output text | while read -r file; do
-            echo "Deleting old file: $file"
             aws s3 rm "s3://${{ env.S3_BUCKET_NAME }}/$file"
           done
 
@@ -68,5 +60,4 @@ jobs:
         run: |
           FILENAME="${{ env.FILENAME }}"
           FOLDER="${{ env.BACKUP_NAME }}/"
-          echo "Uploading ${FILENAME} to s3://${{ env.S3_BUCKET_NAME }}/$FOLDER"
           aws s3 cp "${FILENAME}" "s3://${{ env.S3_BUCKET_NAME }}/$FOLDER" --region ${{ env.AWS_REGION }}
