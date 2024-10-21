@@ -15,7 +15,6 @@ jobs:
 
     env:
       RETENTION: 1
-      FOLDER_NAME: ${{ github.workflow }}
       DATABASE_URL: ${{ secrets.ACME_ANALYTICS_PROD }}
       IAM_ROLE: ${{ secrets.IAM_ROLE }}
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
@@ -36,21 +35,25 @@ jobs:
           role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.IAM_ROLE }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Set file, folder and path variables
+        run: |
+          GZIP_NAME="$(date +'%B-%d-%Y@%H:%M:%S').gz"
+          FOLDER_NAME="${{ github.workflow }}"
+          UPLOAD_PATH="s3://${{ env.S3_BUCKET_NAME }}/${FOLDER_NAME}/${GZIP_NAME}"
+
+          echo "GZIP_NAME=${GZIP_NAME}" >> $GITHUB_ENV
+          echo "FOLDER_NAME=${FOLDER_NAME}" >> $GITHUB_ENV
+          echo "UPLOAD_PATH=${UPLOAD_PATH}" >> $GITHUB_ENV
+
       - name: Create folder if it doesn't exist
         run: |
           if ! aws s3api head-object --bucket ${{ env.S3_BUCKET_NAME }} --key "${{ env.FOLDER_NAME }}/" 2>/dev/null; then
             aws s3api put-object --bucket ${{ env.S3_BUCKET_NAME }} --key "${{ env.FOLDER_NAME }}/"
           fi
 
-      - name: Set timestamp
-        run: |
-          echo "TIMESTAMP=$(date +'%B-%d-%Y@%H:%M:%S')" >> $GITHUB_ENV
-
       - name: Run pg_dump
         run: |
-          FILENAME="${{ env.TIMESTAMP }}.sql.gz"
-          /usr/lib/postgresql/${{ env.PG_VERSION }}/bin/pg_dump ${{ env.DATABASE_URL }} | gzip > "${FILENAME}"
-          echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
+          /usr/lib/postgresql/${{ env.PG_VERSION }}/bin/pg_dump ${{ env.DATABASE_URL }} | gzip > "${{ env.GZIP_NAME }}"
 
       - name: Empty Bucket of old files
         run: |
@@ -61,4 +64,4 @@ jobs:
 
       - name: Upload to Bucket
         run: |
-          aws s3 cp "${{ env.FILENAME }}" "s3://${{ env.S3_BUCKET_NAME }}/${{ env.FOLDER_NAME }}/" --region ${{ env.AWS_REGION }}
+          aws s3 cp "${{ env.GZIP_NAME }}" "${{ env.UPLOAD_PATH }}" --region ${{ env.AWS_REGION }}
