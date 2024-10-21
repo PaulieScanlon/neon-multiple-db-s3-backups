@@ -15,11 +15,11 @@ jobs:
 
     env:
       RETENTION: 1
+      FOLDER_NAME: ${{ github.workflow }}
       DATABASE_URL: ${{ secrets.PAYCORP_PAYMENTS_PROD }}
       IAM_ROLE: ${{ secrets.IAM_ROLE }}
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
       S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
-      BACKUP_NAME: ${{ github.workflow }}
       PG_VERSION: '16'
       AWS_REGION: 'us-east-1'
 
@@ -38,7 +38,7 @@ jobs:
 
       - name: Create folder if it doesn't exist
         run: |
-          FOLDER="${{ env.BACKUP_NAME }}/"
+          FOLDER="${{ env.FOLDER_NAME }}/"
           if ! aws s3api head-object --bucket ${{ env.S3_BUCKET_NAME }} --key "$FOLDER" 2>/dev/null; then
             aws s3api put-object --bucket ${{ env.S3_BUCKET_NAME }} --key "$FOLDER"
           fi
@@ -52,11 +52,11 @@ jobs:
       - name: Empty Bucket of old files
         run: |
           THRESHOLD_DATE=$(date -d "-${{ env.RETENTION }} days" +%Y-%m-%dT%H:%M:%SZ)
-          aws s3api list-objects --bucket ${{ env.S3_BUCKET_NAME }} --query "Contents[?LastModified<'${THRESHOLD_DATE}'] | [?contains(Key, '${{ env.BACKUP_NAME }}')].{Key: Key}" --output text | while read -r file; do
-            aws s3 rm "s3://${{ env.S3_BUCKET_NAME }}/$file"
+          aws s3api list-objects --bucket ${{ env.S3_BUCKET_NAME }} --prefix "${{ env.FOLDER_NAME }}/" --query "Contents[?LastModified<'${THRESHOLD_DATE}'] | [?ends_with(Key, '.sql.gz')].{Key: Key}" --output text | while read -r file; do
+            aws s3 rm "s3://${{ env.S3_BUCKET_NAME }}/${file}"
           done
 
       - name: Upload to Bucket
         run: |
-          FOLDER="${{ env.BACKUP_NAME }}/"
+          FOLDER="${{ env.FOLDER_NAME }}/"
           aws s3 cp "${{ env.FILENAME }}" "s3://${{ env.S3_BUCKET_NAME }}/${FOLDER}" --region ${{ env.AWS_REGION }}
