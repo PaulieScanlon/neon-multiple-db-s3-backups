@@ -38,10 +38,13 @@ jobs:
 
       - name: Create folder if it doesn't exist
         run: |
-          FOLDER="${{ env.FOLDER_NAME }}/"
-          if ! aws s3api head-object --bucket ${{ env.S3_BUCKET_NAME }} --key "$FOLDER" 2>/dev/null; then
-            aws s3api put-object --bucket ${{ env.S3_BUCKET_NAME }} --key "$FOLDER"
+          if ! aws s3api head-object --bucket ${{ env.S3_BUCKET_NAME }} --key "${{ env.FOLDER_NAME }}/" 2>/dev/null; then
+            aws s3api put-object --bucket ${{ env.S3_BUCKET_NAME }} --key "${{ env.FOLDER_NAME }}/"
           fi
+
+      - name: Set timestamp
+        run: |
+          echo "TIMESTAMP=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_ENV
 
       - name: Run pg_dump
         run: |
@@ -52,7 +55,6 @@ jobs:
       - name: Empty Bucket of old files
         run: |
           THRESHOLD_DATE=$(date -d "-${{ env.RETENTION }} days" +%Y-%m-%dT%H:%M:%SZ)
-
           aws s3api list-objects --bucket ${{ env.S3_BUCKET_NAME }} --prefix "${{ env.FOLDER_NAME }}/" --query "Contents[?LastModified<'${THRESHOLD_DATE}'] | [?ends_with(Key, '.sql.gz')].{Key: Key}" --output text | while read -r file; do
             aws s3 rm "s3://${{ env.S3_BUCKET_NAME }}/${file}"
           done
