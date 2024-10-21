@@ -44,7 +44,7 @@ jobs:
 
       - name: Set timestamp
         run: |
-          echo "TIMESTAMP=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_ENV
+          echo "TIMESTAMP=$(date +'%B-%d-%Y@%H:%M:%S')" >> $GITHUB_ENV
 
       - name: Run pg_dump
         run: |
