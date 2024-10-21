@@ -15,50 +15,9 @@ jobs:
 
     env:
       RETENTION: 1
-      FOLDER_NAME: ${{ github.workflow }}
       DATABASE_URL: ${{ secrets.FINCORP_BILLING_PROD }}
       IAM_ROLE: ${{ secrets.IAM_ROLE }}
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
       S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
       PG_VERSION: '16'
       AWS_REGION: 'us-east-1'
-
-    steps:
-      - name: Install PostgreSQL
-        run: |
-          sudo apt install -y postgresql-common
-          yes '' | sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh
-          sudo apt install -y postgresql-${{ env.PG_VERSION }}
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.IAM_ROLE }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Create folder if it doesn't exist
-        run: |
-          if ! aws s3api head-object --bucket ${{ env.S3_BUCKET_NAME }} --key "${{ env.FOLDER_NAME }}/" 2>/dev/null; then
-            aws s3api put-object --bucket ${{ env.S3_BUCKET_NAME }} --key "${{ env.FOLDER_NAME }}/"
-          fi
-
-      - name: Set timestamp
-        run: |
-          echo "TIMESTAMP=$(date +'%B-%d-%Y@%H:%M:%S')" >> $GITHUB_ENV
-
-      - name: Run pg_dump
-        run: |
-          FILENAME="${{ env.TIMESTAMP }}.sql.gz"
-          /usr/lib/postgresql/${{ env.PG_VERSION }}/bin/pg_dump ${{ env.DATABASE_URL }} | gzip > "${FILENAME}"
-          echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
-
-      - name: Empty Bucket of old files
-        run: |
-          THRESHOLD_DATE=$(date -d "-${{ env.RETENTION }} days" +%Y-%m-%dT%H:%M:%SZ)
-          aws s3api list-objects --bucket ${{ env.S3_BUCKET_NAME }} --prefix "${{ env.FOLDER_NAME }}/" --query "Contents[?LastModified<'${THRESHOLD_DATE}'] | [?ends_with(Key, '.sql.gz')].{Key: Key}" --output text | while read -r file; do
-            aws s3 rm "s3://${{ env.S3_BUCKET_NAME }}/${file}"
-          done
-
-      - name: Upload to Bucket
-        run: |
-          aws s3 cp "${{ env.FILENAME }}" "s3://${{ env.S3_BUCKET_NAME }}/${{ env.FOLDER_NAME }}/" --region ${{ env.AWS_REGION }}
