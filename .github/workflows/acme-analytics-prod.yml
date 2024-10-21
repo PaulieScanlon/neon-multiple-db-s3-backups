@@ -45,8 +45,7 @@ jobs:
 
       - name: Run pg_dump
         run: |
-          TIMESTAMP="${{ env.TIMESTAMP }}"
-          FILENAME="${TIMESTAMP}.sql.gz"
+          FILENAME="${{ env.TIMESTAMP }}.sql.gz"
           /usr/lib/postgresql/${{ env.PG_VERSION }}/bin/pg_dump ${{ env.DATABASE_URL }} | gzip > "${FILENAME}"
           echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
 
