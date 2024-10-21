@@ -45,7 +45,8 @@ jobs:
 
       - name: Run pg_dump
         run: |
-          /usr/lib/postgresql/${{ env.PG_VERSION }}/bin/pg_dump ${{ env.DATABASE_URL }} | gzip > "${{ env.TIMESTAMP }}.sql.gz"
+          FILENAME="${{ env.TIMESTAMP }}.sql.gz"
+          /usr/lib/postgresql/${{ env.PG_VERSION }}/bin/pg_dump ${{ env.DATABASE_URL }} | gzip > "${FILENAME}"
 
       - name: Empty Bucket of old files
         run: |
