@@ -58,10 +58,10 @@ jobs:
       - name: Empty bucket of old files
         run: |
           THRESHOLD_DATE=$(date -d "-${{ env.RETENTION }} days" +%Y-%m-%dT%H:%M:%SZ)
-          aws s3api list-objects --bucket ${{ env.S3_BUCKET_NAME }} --prefix "${{ env.FOLDER_NAME }}/" --query "Contents[?LastModified<'${THRESHOLD_DATE}'] | [?ends_with(Key, '.sql.gz')].{Key: Key}" --output text | while read -r file; do
+          aws s3api list-objects --bucket ${{ env.S3_BUCKET_NAME }} --prefix "${{ env.FOLDER_NAME }}/" --query "Contents[?LastModified<'${THRESHOLD_DATE}'] | [?ends_with(Key, '.gz')].{Key: Key}" --output text | while read -r file; do
             aws s3 rm "s3://${{ env.S3_BUCKET_NAME }}/${file}"
           done
 
-      - name: Upload to Bucket
+      - name: Upload to bucket
         run: |
           aws s3 cp "${{ env.GZIP_NAME }}" "${{ env.UPLOAD_PATH }}" --region ${{ env.AWS_REGION }}
